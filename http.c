@@ -34,7 +34,11 @@ void freeHttpClient(httpClient *client) {
 
 static void parseHeader(char *key, char *value, char *line) {
 	char *pos = strstr(line, ":");
-	if(pos == NULL) return ;
+	if (pos == NULL) {
+		key = "\0";
+		value = "\0";
+		return ;
+	}
 	int i = 0;
 	for(i = 0; i < (pos-line); i++) {
 		char c = *(line+i);
@@ -44,10 +48,11 @@ static void parseHeader(char *key, char *value, char *line) {
 		*(key+i) = c;
 	}
 	*(key+i) = '\0';
-	while(*(pos+1) == ' ') {
+	pos ++;
+	while(*pos == ' ') {
 		pos++;
 	}
-	for(i = 0; *(pos+i) != '\0'; pos++) {
+	for(i = 0; *(pos+i) != '\0'; i++) {
 		*(value+i) = *(pos+i);
 	}
 	*(value+i) = '\0';
@@ -91,10 +96,14 @@ static void parseHttpRequest(httpClient *client) {
 	client->version = qCreateString(firstLine->head->next->next->value);
 
 	qLinkListNode *node = lines->head->next;
-	char key[4000], value[4000];
+	char key[4096], value[4096];
+	client->headers = qCreateDict((void(*)(void *))qFreeString);
 	while(node) {
 		parseHeader(key, value, node->value);
-		qAddValueToDictByStrKey(client->headers, key, qCreateString(value));
+		if (strlen(key)) {
+			qAddValueToDictByStrKey(client->headers, key, qCreateString(value));
+		}
+		node = node->next;
 	}
 	qFreeLinkList(lines);
 	qFreeLinkList(firstLine);
@@ -105,8 +114,8 @@ static void parseHttpRequest(httpClient *client) {
 }
 
 static void dealHttpRequest(httpClient *client) {
-	char *buff = "HTTP/1.1 200 OK\r\nServer: QWY\r\nContent-Type:text/html\r\n\r\n";
-	qCatString(client->writeBuff, buff);
+	char *buff = "HTTP/1.1 200 OK\r\nServer: QWY-haha\r\nContent-Type:text/html\r\n\r\n";
+	client->writeBuff = qCreateString(buff);
 }
 
 void readFromClient(qEvent *event, int fd, httpClient *client) {
@@ -126,5 +135,6 @@ void writeToClient(qEvent *event, int fd, httpClient *client) {
 		size = size-retval;
 	}
 	qRmFileWriteEvent(event, fd);
+	freeHttpClient(client);
 	close(fd);
 }
